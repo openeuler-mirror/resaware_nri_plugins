@@ -59,3 +59,11 @@ test_case_install:
 test_case_uninstall:
 	chmod +x deploy.sh
 	./deploy.sh "test_case_uninstall"
+
+#----------------------------------------#
+#          编译NRI插件二进制文件         #
+#----------------------------------------#
+.PHONY: build_binary
+build_binary:
+	mkdir -p bin
+	go build -o bin/nriplugin cmd/nriplugin/main.go
