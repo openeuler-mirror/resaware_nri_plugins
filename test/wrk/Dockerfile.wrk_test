@@ -1,0 +1,26 @@
+# 使用ARM64版本的Alpine Linux作为基础镜像
+FROM golang:1.22-alpine
+
+# 安装wrk
+RUN apk add --no-cache git make gcc musl-dev perl linux-headers
+RUN git clone https://github.com/wg/wrk.git /tmp/wrk && \
+    cd /tmp/wrk && \
+    make && \
+    mv wrk /usr/local/bin && \
+    rm -rf /tmp/wrk
+
+# 设置工作目录
+WORKDIR /app
+
+# 复制Go模块依赖文件
+COPY go.* ./
+RUN go mod download
+
+# 复制源代码
+COPY main.go main.go
+
+# 编译Go程序
+RUN go build -o myapp
+
+# 设置容器启动时执行的命令
+ENTRYPOINT ["./myapp"]

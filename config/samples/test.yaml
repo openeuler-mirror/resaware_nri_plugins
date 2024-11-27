@@ -1,0 +1,9 @@
+apiVersion: resource.sop.huawei.com/v1alpha1
+kind: Oenuma
+metadata:
+  name: testapp
+  namespace: tcs
+spec:
+  name: testapp1
+  replicas: 2
+

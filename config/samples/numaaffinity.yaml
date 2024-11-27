@@ -1,0 +1,19 @@
+apiVersion: resource.sop.huawei.com/v1alpha1
+kind: Oenuma
+metadata:
+  name: podafi
+  namespace: tcs
+spec:
+  name: testapp1
+  replicas: 2
+  node: 
+    - name: 
+        "node"
+      numa:
+        - numaNum: 0
+          cpuset: "0-1"
+          memset: "0"
+      podAffinity:
+        - numaNum: 0
+          podName: "nginx-deployment-d6b48c57d-5cpl6"
+          namespace: "default"
