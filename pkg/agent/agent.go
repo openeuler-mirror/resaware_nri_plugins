@@ -342,7 +342,7 @@ func (a *Agent) updateByLoadBalancing() error {
 					Name:        container.Name,
 					ContainerId: containerId,
 					Cpuset:      strings.Join(cpus, ","),
-					Memset:      string(numaNo),
+					Memset:      strconv.Itoa(numaNo),
 				})
 			}
 			targetNode.PodAffinity = append(targetNode.PodAffinity, pa)
