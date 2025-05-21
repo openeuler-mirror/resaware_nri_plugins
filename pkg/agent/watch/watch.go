@@ -12,4 +12,5 @@ const (
 	Added    = watch.Added
 	Modified = watch.Modified
 	Error    = watch.Error
+	Deleted  = watch.Deleted
 )

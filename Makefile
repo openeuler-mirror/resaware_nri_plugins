@@ -25,17 +25,17 @@ pack:
 GRPC_SERVER_BUILD_DIR = pkg/podAffinityServer
 OBJECT = grpc_server
 OBJECT_DIR = bin
-.PHONY: build_grpc_server
-build_grpc_server: $(GRPC_SERVER_BUILD_DIR)/numafast.c $(GRPC_SERVER_BUILD_DIR)/numafast.o
-	ar rcs $(GRPC_SERVER_BUILD_DIR)/libnumafast.a $(GRPC_SERVER_BUILD_DIR)/numafast.o
-	go build -o ${OBJECT_DIR}/${OBJECT} cmd/grpcServer/main.go
+.PHONY: netrela_server_build
+netrela_server_build: $(GRPC_SERVER_BUILD_DIR)/netrela.cpp $(GRPC_SERVER_BUILD_DIR)/netrela.o
+	ar rcs $(GRPC_SERVER_BUILD_DIR)/libnetrela.a $(GRPC_SERVER_BUILD_DIR)/netrela.o
+	go build -o ${OBJECT_DIR}/${OBJECT} cmd/netRelaServer/main.go
 
-$(GRPC_SERVER_BUILD_DIR)/numafast.o: $(GRPC_SERVER_BUILD_DIR)/numafast.c
-	gcc -c -o $(GRPC_SERVER_BUILD_DIR)/numafast.o ${GRPC_SERVER_BUILD_DIR}/numafast.c
+$(GRPC_SERVER_BUILD_DIR)/netrela.o: $(GRPC_SERVER_BUILD_DIR)/netrela.cpp
+	g++ -c -o $(GRPC_SERVER_BUILD_DIR)/netrela.o ${GRPC_SERVER_BUILD_DIR}/netrela.cpp
 
-.PHONY: grpc_clean
-grpc_clean:
-	rm -f ${GRPC_SERVER_BUILD_DIR}/libnumafast.a ${GRPC_SERVER_BUILD_DIR}/numafast.o
+.PHONY: netrela_clean
+netrela_clean:
+	rm -f ${GRPC_SERVER_BUILD_DIR}/libnumafast.a ${GRPC_SERVER_BUILD_DIR}/netrela.o
 
 #----------------------------------------#
 #         NRI插件及测试用例的部署        #
@@ -67,3 +67,24 @@ test_case_uninstall:
 build_binary:
 	mkdir -p bin
 	go build -o bin/nriplugin cmd/nriplugin/main.go
+
+
+
+##----------------------------------------#
+##         构建gprc服务器                 #
+##----------------------------------------#
+GRPC_SERVER_BUILD_DIR = pkg/podAffinityServer
+OBJECT = grpc_server
+OBJECT_DIR = bin
+.PHONY: numafast_server_build
+numafast_server_build: $(GRPC_SERVER_BUILD_DIR)/numafast.c $(GRPC_SERVER_BUILD_DIR)/numafast.o
+	ar rcs $(GRPC_SERVER_BUILD_DIR)/libnumafast.a $(GRPC_SERVER_BUILD_DIR)/numafast.o
+	go build -o ${OBJECT_DIR}/${OBJECT} cmd/grpcServer/main.go
+
+$(GRPC_SERVER_BUILD_DIR)/numafast.o: $(GRPC_SERVER_BUILD_DIR)/numafast.c
+	gcc -c -o $(GRPC_SERVER_BUILD_DIR)/numafast.o ${GRPC_SERVER_BUILD_DIR}/numafast.c
+
+.PHONY: numafast_clean
+numafast_clean:
+	rm -f ${GRPC_SERVER_BUILD_DIR}/libnumafast.a ${GRPC_SERVER_BUILD_DIR}/numafast.o
+

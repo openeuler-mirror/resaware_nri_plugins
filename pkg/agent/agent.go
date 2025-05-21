@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/containerd/nri/pkg/api"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -18,7 +19,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/klog/v2"
 	"numaadj.huawei.com/pkg/agent/watch"
 	"numaadj.huawei.com/pkg/apis/numaadj/v1alpha1"
 	whilistv1 "numaadj.huawei.com/pkg/apis/whitelist/v1alpha1"
@@ -107,6 +107,11 @@ func (a *Agent) Start(notifyFn NotifyFn) error {
 		return err
 	}
 
+	err = a.setupPodWatch()
+	if err != nil {
+		return err
+	}
+
 	err = a.setupWhitelistWatch()
 	if err != nil {
 		return err
@@ -169,6 +174,16 @@ func (a *Agent) Start(notifyFn NotifyFn) error {
 			if e.Type == watch.Added || e.Type == watch.Modified {
 				if err := a.updateByCrdConfig(e.Object); err != nil {
 					klog.Warningf("failed to update by crd config: %v", err)
+				}
+			}
+
+		case e, ok := <-eventChanOf(a.podWath):
+			if !ok {
+				klog.Warningf("can't accept event to handle event of pod watch , error: %v", e.Object)
+			}
+			if e.Type == watch.Deleted {
+				if err := a.deleteObsoletePodsInCr(e); err != nil {
+					klog.Warningf("failed to delete pod: %v", err)
 				}
 			}
 
@@ -403,23 +418,7 @@ func (a *Agent) updateByNumafastAware() error {
 	}
 	// 如果工作节点上的Pod首次调整，新建一个Node的数据类型为其维护更新的内容和更新后的状态
 	if targetNode == nil {
-		targetNode = &v1alpha1.Node{
-			Name:        a.nodeName,
-			PodAffinity: make([]v1alpha1.PodAffinity, 0),
-			Numa:        make([]v1alpha1.Numa, 0),
-		}
-		for _, numa := range numaInfo.NumaNodes {
-			targetNode.Numa = append(targetNode.Numa, v1alpha1.Numa{
-				NumaNum: int32(numa.NumaNumer),
-				Cpuset:  numa.Cpuset,
-				Memset:  numa.Memset,
-			})
-		}
-
-		if oenuma.Spec.Node == nil {
-			oenuma.Spec.Node = make([]v1alpha1.Node, 0)
-		}
-		oenuma.Spec.Node = append(oenuma.Spec.Node, *targetNode)
+		return fmt.Errorf("faile to get targetNode")
 	}
 
 	podList, err := a.k8sCli.CoreV1().Pods("default").List(context.Background(), v1.ListOptions{})
@@ -471,6 +470,27 @@ func (a *Agent) updateByNumafastAware() error {
 	for i := 0; i < len(targetNode.PodAffinity); i++ {
 		podafi := &targetNode.PodAffinity[i]
 		if mps[podafi.PodName] != "Guaranteed" { //非Guaranteed类型的Pod独占整个numa节点
+			podafi.Containers = make([]v1alpha1.Container, 0)
+			for j := 0; j < len(podList.Items); j++ {
+				if podList.Items[j].Name != podafi.PodName || podList.Items[j].Namespace != podafi.Namespace {
+					continue
+				}
+				p := &podList.Items[j]
+				for _, c := range p.Spec.Containers {
+					conainerId := ""
+					for _, cc := range p.Status.ContainerStatuses {
+						if c.Name == cc.Name {
+							conainerId = cc.ContainerID
+							break
+						}
+					}
+					podafi.Containers = append(podafi.Containers, v1alpha1.Container{
+						Memset:      targetNode.Numa[podafi.NumaNum].Memset,
+						Cpuset:      targetNode.Numa[podafi.NumaNum].Cpuset,
+						ContainerId: conainerId,
+					})
+				}
+			}
 			continue
 		}
 		//Guaranteed类型的Pod按申请的cpu数量进行分配Cpu
@@ -537,6 +557,11 @@ func (a *Agent) updateByCrdConfig(obj runtime.Object) error {
 			return fmt.Errorf("failed to convert unstructured obj.")
 		}
 
+		if strings.ToUpper(oenuma.Spec.UpdateEnable) != strings.ToUpper("enable") {
+			klog.Info("resource in crd oenuma can not be update")
+			return nil
+		}
+
 		config, err := a.createCrdConfigPolicy(oenuma)
 		if err != nil {
 			return fmt.Errorf("failer to create crd config policy.")
@@ -568,21 +593,8 @@ func (a *Agent) createCrdConfigPolicy(oenuma *v1alpha1.Oenuma) (*policy.Config, 
 					ContainerId: containerId,
 					Linux:       &api.LinuxContainerUpdate{Resources: &api.LinuxResources{Cpu: &api.LinuxCPU{Cpus: "", Mems: ""}}},
 				}
-				if podAfi.Containers == nil || len(podAfi.Containers) == 0 { // 按numa节点进行分配
-					idx := 0
-					for idx < len(node.Numa) && node.Numa[idx].NumaNum != podAfi.NumaNum {
-						idx++
-					}
-					if idx >= len(node.Numa) {
-						klog.Warning("can not found numa node affinity with pod")
-						continue
-					}
-					containerUpdate.Linux.Resources.Cpu.Cpus = node.Numa[idx].Cpuset
-					containerUpdate.Linux.Resources.Cpu.Mems = node.Numa[idx].Memset
-				} else {
-					containerUpdate.Linux.Resources.Cpu.Cpus = container.Cpuset
-					containerUpdate.Linux.Resources.Cpu.Mems = container.Memset
-				}
+				containerUpdate.Linux.Resources.Cpu.Cpus = container.Cpuset
+				containerUpdate.Linux.Resources.Cpu.Mems = container.Memset
 				config.Push(containerUpdate)
 			}
 		}
@@ -605,6 +617,7 @@ type Agent struct {
 	notifyFn       NotifyFn // config resource change notification callback
 	crdWatch       watch.Interface
 	whitelistWatch watch.Interface
+	podWath        watch.Interface
 	grpcClient     *nf.GrpcClient
 
 	stopLock sync.Mutex
@@ -691,6 +704,20 @@ func (a *Agent) setupWhitelistWatch() error {
 	return nil
 }
 
+func (a *Agent) setupPodWatch() error {
+	podWath, err := watch.Object(context.Background(), "", "",
+		func(ctx context.Context, ns, name string) (watch.Interface, error) {
+			return a.k8sCli.CoreV1().Pods("").Watch(context.Background(), v1.ListOptions{})
+		},
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to setup pod watch: %v", err)
+	}
+	a.podWath = podWath
+	return nil
+}
+
 func (a *Agent) cleanUpWatches() {
 	if a.crdWatch != nil {
 		a.crdWatch.Stop()
@@ -713,9 +740,137 @@ func (a *Agent) setupGrpc() error {
 }
 
 func (a *Agent) setupConfigCrd() error {
+	// 创建基础crd
 	err := a.cfgIf.CreateConfigCrd(context.Background(), a.crdname, a.namespace)
 	if err != nil {
 		return err
 	}
+
+	gvr := schema.GroupVersionResource{
+		Group:    v1alpha1.SchemeGroupVersion.Group,
+		Version:  "v1alpha1",
+		Resource: "oenumas",
+	}
+	un, err := a.cfgIf.GetConfigCrd(context.Background(), a.namespace, a.crdname, gvr)
+	if err != nil {
+		return err
+	}
+
+	oenuma := &v1alpha1.Oenuma{}
+	err = runtime.DefaultUnstructuredConverter.FromUnstructured(un.UnstructuredContent(), oenuma)
+	if err != nil {
+		return err
+	}
+
+	var targetNode *v1alpha1.Node = nil
+	for idx := 0; idx < len(oenuma.Spec.Node); idx++ {
+		if a.nodeName == oenuma.Spec.Node[idx].Name { // 只能维护插件所在的工作节点上的Pod
+			targetNode = &oenuma.Spec.Node[idx]
+		}
+	}
+
+	numaInfo, err := a.grpcClient.GetNumaNodes()
+	if err != nil {
+		return err
+	}
+
+	getNumaInfo := func(tn string) {
+		logrus.Infof("get numa node for node: %s", tn)
+		for _, numa := range numaInfo.NumaNodes {
+			targetNode.Numa = append(targetNode.Numa, v1alpha1.Numa{
+				NumaNum: int32(numa.NumaNumer),
+				Cpuset:  numa.Cpuset,
+				Memset:  numa.Memset,
+			})
+		}
+	}
+
+	// 如果工作节点上的Pod首次调整，新建一个Node的数据类型为其维护更新的内容和更新后的状态
+	if targetNode == nil {
+		targetNode = &v1alpha1.Node{
+			Name:        a.nodeName,
+			PodAffinity: make([]v1alpha1.PodAffinity, 0),
+			Numa:        make([]v1alpha1.Numa, 0),
+		}
+		//for _, numa := range numaInfo.NumaNodes {
+		//	targetNode.Numa = append(targetNode.Numa, v1alpha1.Numa{
+		//		NumaNum: int32(numa.NumaNumer),
+		//		Cpuset:  numa.Cpuset,
+		//		Memset:  numa.Memset,
+		//	})
+		//}
+		getNumaInfo("nil node")
+		if oenuma.Spec.Node == nil {
+			oenuma.Spec.Node = make([]v1alpha1.Node, 0)
+		}
+		oenuma.Spec.Node = append(oenuma.Spec.Node, *targetNode)
+	} else {
+		targetNode.PodAffinity = make([]v1alpha1.PodAffinity, 0)
+		targetNode.Numa = make([]v1alpha1.Numa, 0)
+		getNumaInfo(targetNode.Name)
+	}
+
+	obj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(oenuma)
+	if err != nil {
+		return err
+	}
+	un.Object = obj
+	_, err = a.cfgIf.UpdateConfigCrd(context.Background(), a.namespace, un)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (a *Agent) deleteObsoletePodsInCr(event watch.Event) error {
+	pod, ok := event.Object.(*corev1.Pod)
+	if !ok {
+		return fmt.Errorf("can not translate to pod")
+	}
+
+	gvr := schema.GroupVersionResource{
+		Group:    v1alpha1.SchemeGroupVersion.Group,
+		Version:  "v1alpha1",
+		Resource: "oenumas",
+	}
+	un, err := a.cfgIf.GetConfigCrd(context.Background(), a.namespace, a.crdname, gvr)
+	if err != nil {
+		return err
+	}
+
+	oenuma := &v1alpha1.Oenuma{}
+	err = runtime.DefaultUnstructuredConverter.FromUnstructured(un.UnstructuredContent(), oenuma)
+	if err != nil {
+		return err
+	}
+
+	var targetNode *v1alpha1.Node = nil
+	for idx := 0; idx < len(oenuma.Spec.Node); idx++ {
+		if a.nodeName == oenuma.Spec.Node[idx].Name { // 只能维护插件所在的工作节点上的Pod
+			targetNode = &oenuma.Spec.Node[idx]
+			break
+		}
+	}
+
+	// 删除目标Pod
+	j := 0
+	for _, podafi := range targetNode.PodAffinity {
+		if podafi.PodName != pod.Name || podafi.Namespace != pod.Namespace {
+			targetNode.PodAffinity[j] = podafi
+			j++
+		}
+	}
+	targetNode.PodAffinity = targetNode.PodAffinity[:j]
+
+	obj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(oenuma)
+	if err != nil {
+		return err
+	}
+	un.Object = obj
+	_, err = a.cfgIf.UpdateConfigCrd(context.Background(), a.namespace, un)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

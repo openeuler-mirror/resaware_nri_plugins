@@ -6,6 +6,7 @@ metadata:
 spec:
   name: testapp1
   replicas: 2
+  updateenable: "disable"
   node: 
     - name: 
         "node"
@@ -16,4 +17,7 @@ spec:
       podAffinity:
         - numaNum: 0
           podName: "nginx-deployment-d6b48c57d-5cpl6"
+          namespace: "default"
+        - numaNum: 0
+          podName: "wrk-deployment-e5v48a24d-5aex6"
           namespace: "default"
