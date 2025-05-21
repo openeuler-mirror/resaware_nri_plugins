@@ -52,6 +52,8 @@ func NewResourceManager(agt *agent.Agent, backend interface{}) (*resmgr, error) 
 func (m *resmgr) Start() error {
 	klog.Infof("starting agent, waiting for initial configuration...")
 
+	//ReconfigContainerd()
+	klog.Info("containerd configed success.")
 	return m.agent.Start(m.updateConfig)
 }
 

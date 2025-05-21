@@ -6,6 +6,8 @@ require (
 	github.com/containerd/nri v0.6.1
 	github.com/containerd/otelttrpc v0.0.0-20240305015340-ea5083fda723
 	github.com/containerd/ttrpc v1.2.3
+	github.com/coreos/go-systemd/v22 v22.5.0
+	github.com/pelletier/go-toml/v2 v2.2.3
 	github.com/sirupsen/logrus v1.9.3
 	google.golang.org/grpc v1.66.0
 	google.golang.org/protobuf v1.34.1
@@ -23,6 +25,7 @@ require (
 	github.com/go-openapi/jsonpointer v0.19.6 // indirect
 	github.com/go-openapi/jsonreference v0.20.2 // indirect
 	github.com/go-openapi/swag v0.22.3 // indirect
+	github.com/godbus/dbus/v5 v5.0.4 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/gnostic-models v0.6.8 // indirect

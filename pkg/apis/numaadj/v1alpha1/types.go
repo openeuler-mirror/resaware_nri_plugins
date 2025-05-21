@@ -6,9 +6,10 @@ import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 // OenumaSpec defines the desired state of Oenuma
 type OenumaSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS -- desired state of cluster
-	Name     string `json:"name,omitempty"`
-	Replicas int32  `json:"replicas,omitempty"`
-	Node     []Node `json:"node,omitempty"`
+	Name         string `json:"name,omitempty"`
+	Replicas     int32  `json:"replicas,omitempty"`
+	Node         []Node `json:"node,omitempty"`
+	UpdateEnable string `json:"updateenable,omitempty"`
 }
 
 // +k8s:deepcopy-gen=true

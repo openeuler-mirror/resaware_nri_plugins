@@ -16,3 +16,7 @@
 
 bin/
 .vscode
+*.a
+*.o
+
+.idea/

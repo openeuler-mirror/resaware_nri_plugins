@@ -10,11 +10,12 @@ import (
 	"fmt"
 	"log"
 	"net"
-	pb "numaadj.huawei.com/pkg/podAffinityServer/proto"
 	"os/exec"
 	"strconv"
 	"strings"
 	"unsafe"
+
+	pb "numaadj.huawei.com/pkg/podAffinityServer/proto"
 
 	"google.golang.org/grpc"
 	"k8s.io/apimachinery/pkg/util/yaml"

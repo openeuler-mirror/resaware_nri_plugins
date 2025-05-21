@@ -92,8 +92,9 @@ func (cif *configIf) CreateConfigCrd(ctx context.Context, name, ns string) error
 				"namespace": ns,
 			},
 			"spec": map[string]interface{}{
-				"name":     "testapp1",
-				"replicas": 1,
+				"name":         "testapp1",
+				"replicas":     1,
+				"updateenable": "enable",
 			},
 		},
 	}
