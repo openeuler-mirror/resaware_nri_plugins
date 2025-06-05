@@ -25,7 +25,7 @@ typedef struct net_rela {
 } net_rela;
 
 int oeawareStart();
-void oeawareShutDown();
+void oeawareShutdown();
 net_rela* getDataPtr();
 int getDataNums();
 

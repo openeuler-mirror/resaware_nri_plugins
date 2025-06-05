@@ -5,7 +5,7 @@ apply_config_crd() {
     echo "crd '$CRD_NAME' already exists."
   else
     # apply_crd
-    kubectl apply -f ./config/crd/resource.sop.huawei.com_oenumas.yaml
+    kubectl apply -f /etc/nriplugin/resource.sop.huawei.com_oenumas.yaml
     if [ $? -eq 0 ]; then
       echo "crd '$CRD_NAME' create succecss."
     else
@@ -15,12 +15,12 @@ apply_config_crd() {
 }
 
 apply_whitelist_crd() {
-  local WHITE_LIST_NAME=".resource.sop.huawei.com"
+  local WHITE_LIST_NAME="whitelists.resource.sop.huawei.com"
   if kubectl get crd | grep -wq "$WHITE_LIST_NAME"; then
     echo "crd '$WHITE_LIST_NAME' already exists."
   else
     # apply_crd
-    kubectl apply -f ./config/crd/resource.sop.huawei.com_whitelists.yaml
+    kubectl apply -f /etc/nriplugin/resource.sop.huawei.com_whitelists.yaml
     if [ $? -eq 0 ]; then
       echo "crd '$WHITE_LIST_NAME' create succecss."
     else
