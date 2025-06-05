@@ -50,11 +50,10 @@ static void mockData(const DataList *dataList) {
 
 
 static int QueryNetLocalAffiInfo(const DataList *dataList) {
-    if (dataList && dataList->len <= 0 && dataList->data) {
-        return 0;
-    } else {
-        phraseData(dataList);
-    }
+    if (dataList && dataList->len && dataList->data) {
+            phraseData(dataList);
+        }
+    return 0;
 }
 
 int oeawareStart() {

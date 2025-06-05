@@ -28,7 +28,7 @@ OBJECT_DIR = bin
 .PHONY: netrela_server_build
 netrela_server_build: $(GRPC_SERVER_BUILD_DIR)/netrela.cpp $(GRPC_SERVER_BUILD_DIR)/netrela.o
 	ar rcs $(GRPC_SERVER_BUILD_DIR)/libnetrela.a $(GRPC_SERVER_BUILD_DIR)/netrela.o
-	go build -o ${OBJECT_DIR}/${OBJECT} cmd/netRelaServer/main.go
+	go build -o ${OBJECT_DIR}/${OBJECT} -ldflags "-extldflags -lstdc++" cmd/netRelaServer/main.go
 
 $(GRPC_SERVER_BUILD_DIR)/netrela.o: $(GRPC_SERVER_BUILD_DIR)/netrela.cpp
 	g++ -c -o $(GRPC_SERVER_BUILD_DIR)/netrela.o ${GRPC_SERVER_BUILD_DIR}/netrela.cpp

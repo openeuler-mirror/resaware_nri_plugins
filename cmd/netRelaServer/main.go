@@ -11,9 +11,12 @@ import (
 	"k8s.io/klog/v2"
 	"net"
 	pb "numaadj.huawei.com/pkg/podAffinityServer/proto"
+	"os"
 	"os/exec"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"unsafe"
 
 	"k8s.io/apimachinery/pkg/util/yaml"
@@ -50,10 +53,38 @@ func main() {
 	grpcServer := grpc.NewServer()
 	pb.RegisterPodAffinityAwareServer(grpcServer, s)
 
+	ctx := signalHandler()
+	go func() {
+		select {
+		case <-ctx.Done():
+			klog.Infof("oeaware Unsubscribe..")
+			s.OeAwareShutdown()
+			grpcServer.GracefulStop()
+		}
+	}()
+
 	err = grpcServer.Serve(listen)
 	if err != nil {
 		klog.Fatalf("Failed to start server: %v", err)
 	}
+}
+
+func signalHandler() context.Context {
+	ctx, cancel := context.WithCancel(context.Background())
+	c := make(chan os.Signal, 2)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		<-c
+		cancel()
+		<-c
+		os.Exit(1)
+	}()
+	return ctx
+}
+
+func (s *server) OeAwareShutdown() {
+	C.oeawareShutdown()
 }
 
 func (s *server) ConnectOeAware() error {
