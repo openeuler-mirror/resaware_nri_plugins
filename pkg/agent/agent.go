@@ -4,26 +4,30 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
-
 	"github.com/containerd/nri/pkg/api"
+	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/klog/v2"
 	"numaadj.huawei.com/pkg/agent/watch"
-	"numaadj.huawei.com/pkg/apis/numaadj/v1alpha1"
-	whilistv1 "numaadj.huawei.com/pkg/apis/whitelist/v1alpha1"
+	"numaadj.huawei.com/pkg/apis/resaware/v1alpha1"
 	"numaadj.huawei.com/pkg/policy"
 	nf "numaadj.huawei.com/pkg/policy/numafast"
+	"numaadj.huawei.com/pkg/prometheus"
+	"numaadj.huawei.com/pkg/resctrl"
+	"numaadj.huawei.com/pkg/typedef"
+	"os"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
 )
 
 type Option func(*Agent) error
@@ -42,6 +46,7 @@ var (
 const (
 	NET_AFFINITY = iota
 	LOAD_BALANCE
+	GROUP_LABEL = "rcgroup"
 )
 
 func init() {
@@ -95,6 +100,7 @@ func New(cfgIf ConfigInterface, options ...Option) (*Agent, error) {
 }
 
 func (a *Agent) Start(notifyFn NotifyFn) error {
+
 	a.notifyFn = notifyFn
 
 	err := a.setupClients()
@@ -135,6 +141,22 @@ func (a *Agent) Start(notifyFn NotifyFn) error {
 		}
 		return w.ResultChan()
 	}
+
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+
+	err = a.initPodCache(err)
+	if err != nil {
+		return err
+	}
+
+	getWatcher(a.k8sCli).watchNode()
+	getWatcher(a.k8sCli).watchNodeConfigMap()
+	getWatcher(a.k8sCli).watchGroupConfigMap()
+
+	go wait.Until(resctrl.SyncResCtrlGroupTasks, time.Duration(ReSyncTimeSecond)*time.Second, stopCh)
+
+	go prometheus.StartMetricsServer()
 
 	klog.Info("initialization configuration complete, starting up now...")
 
@@ -202,6 +224,26 @@ func (a *Agent) Start(notifyFn NotifyFn) error {
 	}
 }
 
+func (a *Agent) initPodCache(err error) error {
+	pods, err := a.k8sCli.CoreV1().Pods("").List(context.TODO(), v1.ListOptions{
+		LabelSelector: GROUP_LABEL,
+	})
+	if err != nil {
+		klog.Errorf("failed to list pods: %v", err)
+		return err
+	}
+	podCacheInstance := typedef.PodCacheInstance()
+	for _, pod := range pods.Items {
+		podCacheInstance.UpdatePod(&typedef.PodInfo{
+			Name:      pod.Name,
+			UID:       string(pod.UID),
+			Namespace: pod.Namespace,
+			Labels:    pod.Labels,
+		})
+	}
+	return nil
+}
+
 func (a *Agent) Stop() {
 	a.stopLock.Lock()
 	defer a.stopLock.Unlock()
@@ -213,7 +255,7 @@ func (a *Agent) Stop() {
 	}
 }
 
-func (a *Agent) getManagedPods() (*whilistv1.Whitelist, error) {
+func (a *Agent) getManagedPods() (*v1alpha1.Whitelist, error) {
 	gvr := schema.GroupVersionResource{
 		Group:    v1alpha1.SchemeGroupVersion.Group,
 		Version:  "v1alpha1",
@@ -225,7 +267,7 @@ func (a *Agent) getManagedPods() (*whilistv1.Whitelist, error) {
 		return nil, err
 	}
 
-	whitelist := &whilistv1.Whitelist{}
+	whitelist := &v1alpha1.Whitelist{}
 	err = runtime.DefaultUnstructuredConverter.FromUnstructured(un.UnstructuredContent(), whitelist)
 	if err != nil {
 		return nil, err
@@ -611,9 +653,8 @@ type Agent struct {
 	namespace  string
 	crdname    string
 
-	cfgIf  ConfigInterface // custom resource access interface
-	k8sCli *kubernetes.Clientset
-
+	cfgIf          ConfigInterface // custom resource access interface
+	k8sCli         *kubernetes.Clientset
 	notifyFn       NotifyFn // config resource change notification callback
 	crdWatch       watch.Interface
 	whitelistWatch watch.Interface
@@ -640,7 +681,6 @@ func (a *Agent) setupClients() error {
 	if err != nil {
 		return fmt.Errorf("failed to setup config resource client: %v", err)
 	}
-
 	return nil
 }
 
@@ -829,7 +869,7 @@ func (a *Agent) deleteObsoletePodsInCr(event watch.Event) error {
 	}
 
 	gvr := schema.GroupVersionResource{
-		Group:    v1alpha1.SchemeGroupVersion.Group,
+		Group:    v1alpha1.SchemeGroupVersion.Group,                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
 		Version:  "v1alpha1",
 		Resource: "oenumas",
 	}
@@ -850,6 +890,11 @@ func (a *Agent) deleteObsoletePodsInCr(event watch.Event) error {
 			targetNode = &oenuma.Spec.Node[idx]
 			break
 		}
+	}
+
+	if targetNode == nil {
+		logrus.Infof("current node is not in oenuma, oenuma's node: %+v", oenuma.Spec.Node)
+		return nil
 	}
 
 	// 删除目标Pod

@@ -34,7 +34,12 @@ rules:
 - apiGroups: [""]
   resources: ["pods"]
   verbs: ["list","get","watch"]
-
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["list","get","watch"]
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["list","get","watch"]
 ---
 
 apiVersion: rbac.authorization.k8s.io/v1
@@ -52,44 +57,59 @@ roleRef:
 
 ---
 
-apiVersion: apps/v1  
-kind: DaemonSet  
-metadata:  
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
   name: numaadj
-  labels:  
+  labels:
     app: numaadj
-spec:  
-  selector:  
-    matchLabels:  
+spec:
+  selector:
+    matchLabels:
       app: numaadj
-  template:  
-    metadata:  
-      labels:  
+  template:
+    metadata:
+      labels:
         app: numaadj
-    spec:  
+    spec:
       hostNetwork: true
+      hostPID: true
+      hostIPC: true
       volumes:
-      - name: vol
-        hostPath:
-          path: /var/run/nri/nri.sock
-      containers:  
-      - name: numaadj
-        image: hongxuming/nriplugin:latest
-        env:
-        - name: NRI_POD_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.name
-        - name: NRI_POD_NAMESPACE
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.namespace
-        - name: NODE_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: spec.nodeName
-        imagePullPolicy: Always
-        volumeMounts:
         - name: vol
-          mountPath: /var/run/nri/nri.sock
-        args: ["-config-namespace", "tcs"]
+          hostPath:
+            path: /var/run/nri/nri.sock
+        - name: resctrl
+          hostPath:
+            path: /sys/fs/resctrl/
+        - name: sysfs
+          hostPath:
+            path: /sys/fs/cgroup/
+      containers:
+        - name: numaadj
+          image: hongxuming/nriplugin:latest
+          securityContext:
+            privileged: true
+          env:
+            - name: NRI_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: NRI_POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          imagePullPolicy: Never
+          args: ["-config-namespace", "tcs"]
+          volumeMounts:
+            - name: vol
+              mountPath: /var/run/nri/nri.sock
+            - name: resctrl
+              mountPath: /sys/fs/resctrl/
+            - name: sysfs
+              mountPath: /sys/fs/cgroup/
+

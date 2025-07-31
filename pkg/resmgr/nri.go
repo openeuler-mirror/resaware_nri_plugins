@@ -3,24 +3,30 @@ package resmgr
 import (
 	"context"
 	"fmt"
+	"numaadj.huawei.com/pkg/typedef"
 	"os"
+	"sync"
 
 	"github.com/containerd/nri/pkg/api"
 	"github.com/containerd/nri/pkg/stub"
 	"github.com/containerd/otelttrpc"
 	"github.com/containerd/ttrpc"
 	"k8s.io/klog/v2"
-	"numaadj.huawei.com/pkg/apis/numaadj/v1alpha1"
+	"numaadj.huawei.com/pkg/apis/resaware/v1alpha1"
 )
 
 type nriPlugin struct {
-	stub   stub.Stub
-	resmgr *resmgr
+	stub        stub.Stub
+	resmgr      *resmgr
+	cacheMu     sync.Mutex
+	podCacheIns *typedef.PodCache
 }
 
 func newNRIPlugin(resmgr *resmgr) (*nriPlugin, error) {
 	p := &nriPlugin{
-		resmgr: resmgr,
+		resmgr:      resmgr,
+		podCacheIns: typedef.PodCacheInstance(),
+		cacheMu:     sync.Mutex{},
 	}
 
 	klog.Infof("creating plugin...")
@@ -90,10 +96,31 @@ func (p *nriPlugin) onClose() {
 }
 
 func (p *nriPlugin) Configure(ctx context.Context, cfg, runtime, version string) (stub.EventMask, error) {
-	return api.MustParseEventMask("RunPodSandbox"), nil
+	return api.MustParseEventMask("RunPodSandbox,StopPodSandbox"), nil
 }
 
 func (p *nriPlugin) RunPodSandbox(ctx context.Context, pod *api.PodSandbox) error {
+	p.cacheMu.Lock()
+	defer p.cacheMu.Unlock()
+
+	if _, ok := pod.Labels[typedef.GroupLabel]; !ok {
+		return nil
+	}
+	
+	p.podCacheIns.UpdatePod(&typedef.PodInfo{
+		Name:      pod.Name,
+		UID:       pod.Uid,
+		Namespace: pod.Namespace,
+		Labels:    pod.Labels,
+	})
+	klog.Infof("pod %s/%s (id=%s) created, cached", pod.Namespace, pod.Name, pod.Uid)
+	return nil
+}
+
+func (p *nriPlugin) StopPodSandbox(ctx context.Context, pod *api.PodSandbox) error {
+	p.cacheMu.Lock()
+	defer p.cacheMu.Unlock()
+	p.podCacheIns.DelPod(pod.Uid)
 	return nil
 }
 
