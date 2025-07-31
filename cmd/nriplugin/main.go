@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-
 	"k8s.io/klog/v2"
 	"numaadj.huawei.com/pkg/agent"
 	"numaadj.huawei.com/pkg/resmgr"

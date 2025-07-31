@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mpam-qos-config.default
+data:
+  rc.conf: |
+    mpam:
+      DEFAULT:
+        L3PRI: 3
+        MBPRI: 7
+      LSR:
+        L3PRI: 3
+        MBPRI: 7
+      LS:
+        L3PRI: 2
+        MBPRI: 5
+      BE:
+        L3PRI: 0
+        MBPRI: 3

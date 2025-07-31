@@ -12,7 +12,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
-	"numaadj.huawei.com/pkg/apis/numaadj/v1alpha1"
+	"numaadj.huawei.com/pkg/apis/resaware/v1alpha1"
 )
 
 type configKind int

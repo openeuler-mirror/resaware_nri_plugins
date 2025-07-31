@@ -54,6 +54,13 @@ func (m *resmgr) Start() error {
 
 	//ReconfigContainerd()
 	klog.Info("containerd configed success.")
+	if !m.running {
+		klog.Infof("aquired initial configuration")
+		if err := m.start(nil); err != nil {
+			klog.Fatalf("failed to start with initial configuration: %v", err)
+		}
+		m.running = true
+	}
 	return m.agent.Start(m.updateConfig)
 }
 
@@ -100,8 +107,6 @@ func (m *resmgr) reconfigCrd(crdCfg *policy.Config) error {
 
 func (m *resmgr) start(cfg interface{}) error {
 	klog.Infof("starting resource manager...")
-	if cfg != nil {
-	}
 	if err := m.nri.start(); err != nil {
 		return err
 	}
