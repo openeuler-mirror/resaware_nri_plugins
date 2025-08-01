@@ -207,7 +207,7 @@ func (w *watcher) watchGroupConfigMap() {
 				if err != nil {
 					klog.Warningf("Failed to get default ConfigMap (%q): %v", cmName, err)
 					w.setGroupConfig(nil)
-					return
+					break
 				}
 				w.setGroupConfig(&defaultCm.Data)
 			default:
@@ -297,6 +297,7 @@ func ApplyConfig(data *ConfigData) {
 			if err != nil {
 				klog.Errorf("failed to write resctrl schemata: %v", err)
 				return
+				
 			}
 		}
 	}
