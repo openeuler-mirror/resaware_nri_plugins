@@ -145,7 +145,7 @@ func StartMetricsServer() {
 	}()
 
 	// 定时采集指标
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(time.Duration(metricCollectPeriodSecond) * time.Second)
 	for {
 		select {
 		case <-ticker.C:
